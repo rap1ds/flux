@@ -25,8 +25,8 @@ var TodoStore = require('../stores/TodoStore');
  */
 function getTodoState() {
   return {
-    allTodos: TodoStore.getAll(),
-    areAllComplete: TodoStore.areAllComplete()
+    allTodos: {},
+    areAllComplete: null
   };
 }
 
@@ -37,11 +37,14 @@ var TodoApp = React.createClass({
   },
 
   componentDidMount: function() {
-    TodoStore.addChangeListener(this._onChange);
-  },
+    var component = this;
 
-  componentWillUnmount: function() {
-    TodoStore.removeChangeListener(this._onChange);
+    TodoStore.allTodos.onValue(function(todos) {
+      component.setState({
+        allTodos: todos,
+        areAllComplete: false
+      });
+    });
   },
 
   /**

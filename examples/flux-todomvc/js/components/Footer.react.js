@@ -11,12 +11,23 @@
 
 var React = require('react');
 var ReactPropTypes = React.PropTypes;
-var TodoActions = require('../actions/TodoActions');
+var eventBinder = require('../stream-helpers/EventBinder');
+var AppDispatcher = require('../dispatcher/AppDispatcher');
 
 var Footer = React.createClass({
 
   propTypes: {
     allTodos: ReactPropTypes.object.isRequired
+  },
+
+  componentWillMount: function() {
+    var eventStream = eventBinder(this);
+    this.clearClickStream = eventStream("_onClearCompletedClick");
+  },
+
+  componentDidMount: function() {
+    var component = this;
+    AppDispatcher.clearCompletedStream.plug(this.clearClickStream);
   },
 
   /**
@@ -63,13 +74,6 @@ var Footer = React.createClass({
         {clearCompletedButton}
       </footer>
     );
-  },
-
-  /**
-   * Event handler to delete all completed TODOs
-   */
-  _onClearCompletedClick: function() {
-    TodoActions.destroyCompleted();
   }
 
 });

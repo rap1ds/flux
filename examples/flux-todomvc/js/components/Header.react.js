@@ -10,10 +10,27 @@
  */
 
 var React = require('react');
-var TodoActions = require('../actions/TodoActions');
+var Bacon = require('baconjs');
 var TodoTextInput = require('./TodoTextInput.react');
+var AppDispatcher = require('../dispatcher/AppDispatcher');
 
 var Header = React.createClass({
+
+  componentWillMount: function() {
+    this.onSave = new Bacon.Bus();
+  },
+
+  componentDidMount: function() {
+    var saveStream = this.onSave
+      .map(function(text) {
+        return text.trim();
+      })
+      .filter(function(v) {
+        return v;
+      });
+
+    AppDispatcher.createTodoStream.plug(saveStream);
+  },
 
   /**
    * @return {object}
@@ -25,23 +42,10 @@ var Header = React.createClass({
         <TodoTextInput
           id="new-todo"
           placeholder="What needs to be done?"
-          onSave={this._onSave}
+          onSave={this.onSave}
         />
       </header>
     );
-  },
-
-  /**
-   * Event handler called within TodoTextInput.
-   * Defining this here allows TodoTextInput to be used in multiple places
-   * in different ways.
-   * @param {string} text
-   */
-  _onSave: function(text) {
-    if (text.trim()){
-      TodoActions.create(text);
-    }
-
   }
 
 });

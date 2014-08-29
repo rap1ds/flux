@@ -10,9 +10,11 @@
  */
 
 var React = require('react');
+var Bacon = require('baconjs');
 var ReactPropTypes = React.PropTypes;
-var TodoActions = require('../actions/TodoActions');
 var TodoTextInput = require('./TodoTextInput.react');
+var eventBinder = require('../stream-helpers/EventBinder');
+var AppDispatcher = require('../dispatcher/AppDispatcher');
 
 var cx = require('react/lib/cx');
 
@@ -28,6 +30,49 @@ var TodoItem = React.createClass({
     };
   },
 
+  componentWillMount: function() {
+    var eventStream = eventBinder(this);
+
+    this.onSave = new Bacon.Bus();
+    this.destroyClickStream = eventStream("_onDestroyClick");
+    this.toggleCompleteClickStream = eventStream("_onToggleComplete");
+  },
+
+  componentDidMount: function() {
+    var component = this;
+
+    var destroyStream = this.destroyClickStream.map(function() {
+      return component.props.todo.id;
+    });
+
+    AppDispatcher.destroyTodoStream.plug(destroyStream);
+
+    var completeStream = this.toggleCompleteClickStream.filter(function() {
+      return !component.props.todo.complete;
+    }).map(function() {
+      return component.props.todo.id;
+    });
+
+    var undoCompleteStream = this.toggleCompleteClickStream.filter(function() {
+      return component.props.todo.complete;
+    }).map(function() {
+      return component.props.todo.id;
+    });
+
+    AppDispatcher.completeStream.plug(completeStream);
+    AppDispatcher.undoCompleteStream.plug(undoCompleteStream);
+
+    this.onSave.onValue(function(v) {
+      component.setState({isEditing: false});
+    });
+
+    var updateStream = this.onSave.map(function(text) {
+      return {id: component.props.todo.id, text: text}
+    })
+
+    AppDispatcher.updateStream.plug(updateStream);
+  },
+
   /**
    * @return {object}
    */
@@ -39,7 +84,7 @@ var TodoItem = React.createClass({
       input =
         <TodoTextInput
           className="edit"
-          onSave={this._onSave}
+          onSave={this.onSave}
           value={todo.text}
         />;
     }
@@ -73,27 +118,8 @@ var TodoItem = React.createClass({
     );
   },
 
-  _onToggleComplete: function() {
-    TodoActions.toggleComplete(this.props.todo);
-  },
-
   _onDoubleClick: function() {
     this.setState({isEditing: true});
-  },
-
-  /**
-   * Event handler called within TodoTextInput.
-   * Defining this here allows TodoTextInput to be used in multiple places
-   * in different ways.
-   * @param  {string} text
-   */
-  _onSave: function(text) {
-    TodoActions.updateText(this.props.todo.id, text);
-    this.setState({isEditing: false});
-  },
-
-  _onDestroyClick: function() {
-    TodoActions.destroy(this.props.todo.id);
   }
 
 });

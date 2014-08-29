@@ -11,14 +11,37 @@
 
 var React = require('react');
 var ReactPropTypes = React.PropTypes;
-var TodoActions = require('../actions/TodoActions');
 var TodoItem = require('./TodoItem.react');
+var eventBinder = require('../stream-helpers/EventBinder');
+var AppDispatcher = require('../dispatcher/AppDispatcher');
+var TodoStore = require('../stores/TodoStore');
 
 var MainSection = React.createClass({
 
   propTypes: {
     allTodos: ReactPropTypes.object.isRequired,
     areAllComplete: ReactPropTypes.bool.isRequired
+  },
+
+  componentWillMount: function() {
+    var eventStream = eventBinder(this);
+
+    this.toggleCompleteAllClickStream = eventStream("_onToggleCompleteAll");
+  },
+
+  componentDidMount: function() {
+    var component = this;
+    TodoStore.allCompleted.onValue(function(allCompleted) {
+      component.setState({
+        allCompleted: allCompleted
+      });
+    })
+
+    var toggleAll = this.toggleCompleteAllClickStream.map(function() {
+      return !component.state.allCompleted;
+    });
+
+    AppDispatcher.toggleAllCompletedStream.plug(toggleAll);
   },
 
   /**
@@ -50,13 +73,6 @@ var MainSection = React.createClass({
         <ul id="todo-list">{todos}</ul>
       </section>
     );
-  },
-
-  /**
-   * Event handler to mark all TODOs as complete
-   */
-  _onToggleCompleteAll: function() {
-    TodoActions.toggleCompleteAll();
   }
 
 });

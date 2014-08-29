@@ -10,7 +10,9 @@
  */
 
 var React = require('react');
+var Bacon = require('baconjs');
 var ReactPropTypes = React.PropTypes;
+var eventBinder = require('../stream-helpers/EventBinder');
 
 var ENTER_KEY_CODE = 13;
 
@@ -30,6 +32,42 @@ var TodoTextInput = React.createClass({
     };
   },
 
+  componentWillMount: function() {
+    var component = this;
+    var eventStream = eventBinder(component);
+
+    this.blurStream = eventStream("_onBlur");
+    this.keyDownStream = eventStream("_onKeyDown");
+    this.changeStream = eventStream("_onChange");
+  },
+
+  componentDidMount: function() {
+    var component = this;
+    var eventStream = eventBinder(component);
+
+    var enterStream = this.keyDownStream.filter(function(event) {
+      return event.keyCode === ENTER_KEY_CODE;
+    });
+
+    var saveStream = this.blurStream.merge(enterStream).map(function(e) {
+      return event.target.value;
+    })
+
+    saveStream.onValue(function() {
+      component.setState({
+        value: ''
+      });
+    });
+
+    this.changeStream.onValue(function(e) {
+      component.setState({
+        value: e.target.value
+      });
+    });
+
+    this.props.onSave.plug(saveStream);
+  },
+
   /**
    * @return {object}
    */
@@ -39,42 +77,14 @@ var TodoTextInput = React.createClass({
         className={this.props.className}
         id={this.props.id}
         placeholder={this.props.placeholder}
-        onBlur={this._save}
+        onBlur={this._onBlur}
         onChange={this._onChange}
         onKeyDown={this._onKeyDown}
         value={this.state.value}
         autoFocus={true}
+        ref="todoTextInput"
       />
     );
-  },
-
-  /**
-   * Invokes the callback passed in as onSave, allowing this component to be
-   * used in different ways.
-   */
-  _save: function() {
-    this.props.onSave(this.state.value);
-    this.setState({
-      value: ''
-    });
-  },
-
-  /**
-   * @param {object} event
-   */
-  _onChange: function(/*object*/ event) {
-    this.setState({
-      value: event.target.value
-    });
-  },
-
-  /**
-   * @param  {object} event
-   */
-  _onKeyDown: function(event) {
-    if (event.keyCode === ENTER_KEY_CODE) {
-      this._save();
-    }
   }
 
 });

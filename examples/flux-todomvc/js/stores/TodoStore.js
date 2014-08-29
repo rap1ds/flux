@@ -1,22 +1,5 @@
-/*
- * Copyright (c) 2014, Facebook, Inc.
- * All rights reserved.
- *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
- *
- * TodoStore
- */
-
+var _ = require('lodash');
 var AppDispatcher = require('../dispatcher/AppDispatcher');
-var EventEmitter = require('events').EventEmitter;
-var TodoConstants = require('../constants/TodoConstants');
-var merge = require('react/lib/merge');
-
-var CHANGE_EVENT = 'change';
-
-var _todos = {};
 
 /**
  * Create a TODO item.
@@ -27,152 +10,92 @@ function create(text) {
   // server-side storage.
   // Using the current timestamp in place of a real id.
   var id = Date.now();
+  var _todos = {};
   _todos[id] = {
     id: id,
     complete: false,
     text: text
   };
+  return _todos;
 }
 
-/**
- * Update a TODO item.
- * @param  {string} id
- * @param {object} updates An object literal containing only the data to be
- *     updated.
- */
-function update(id, updates) {
-  _todos[id] = merge(_todos[id], updates);
-}
+var createNewItem = AppDispatcher.createTodoStream.map(function(text) {
+  return text.trim();
+}).filter(function(text) {
+  return text;
+}).map(function(text) {
+  return create(text);
+}).map(function(todo) {
+  return function(todos) {
+    return _.assign({}, todos, todo)
+  };
+});
 
-/**
- * Update all of the TODO items with the same object.
- *     the data to be updated.  Used to mark all TODOs as completed.
- * @param  {object} updates An object literal containing only the data to be
- *     updated.
+var destroyTodoStream = AppDispatcher.destroyTodoStream.map(function(todoId) {
+  return function(todos) {
+    return _.omit(todos, "" + todoId)
+  };
+});
 
- */
-function updateAll(updates) {
-  for (var id in _todos) {
-    update(id, updates);
-  }
-}
-
-/**
- * Delete a TODO item.
- * @param  {string} id
- */
-function destroy(id) {
-  delete _todos[id];
-}
-
-/**
- * Delete all the completed TODO items.
- */
-function destroyCompleted() {
-  for (var id in _todos) {
-    if (_todos[id].complete) {
-      destroy(id);
-    }
-  }
-}
-
-var TodoStore = merge(EventEmitter.prototype, {
-
-  /**
-   * Tests whether all the remaining TODO items are marked as completed.
-   * @return {boolean}
-   */
-  areAllComplete: function() {
-    for (var id in _todos) {
-      if (!_todos[id].complete) {
-        return false;
-      }
-    }
-    return true;
-  },
-
-  /**
-   * Get the entire collection of TODOs.
-   * @return {object}
-   */
-  getAll: function() {
-    return _todos;
-  },
-
-  emitChange: function() {
-    this.emit(CHANGE_EVENT);
-  },
-
-  /**
-   * @param {function} callback
-   */
-  addChangeListener: function(callback) {
-    this.on(CHANGE_EVENT, callback);
-  },
-
-  /**
-   * @param {function} callback
-   */
-  removeChangeListener: function(callback) {
-    this.removeListener(CHANGE_EVENT, callback);
+var completeStream = AppDispatcher.completeStream.map(function(todoId) {
+  return function(todos) {
+    var complete = {};
+    complete[todoId] = {complete: true}
+    return _.merge(todos, complete);
   }
 });
 
-// Register to handle all updates
-AppDispatcher.register(function(payload) {
-  var action = payload.action;
-  var text;
-
-  switch(action.actionType) {
-    case TodoConstants.TODO_CREATE:
-      text = action.text.trim();
-      if (text !== '') {
-        create(text);
-      }
-      break;
-
-    case TodoConstants.TODO_TOGGLE_COMPLETE_ALL:
-      if (TodoStore.areAllComplete()) {
-        updateAll({complete: false});
-      } else {
-        updateAll({complete: true});
-      }
-      break;
-
-    case TodoConstants.TODO_UNDO_COMPLETE:
-      update(action.id, {complete: false});
-      break;
-
-    case TodoConstants.TODO_COMPLETE:
-      update(action.id, {complete: true});
-      break;
-
-    case TodoConstants.TODO_UPDATE_TEXT:
-      text = action.text.trim();
-      if (text !== '') {
-        update(action.id, {text: text});
-      }
-      break;
-
-    case TodoConstants.TODO_DESTROY:
-      destroy(action.id);
-      break;
-
-    case TodoConstants.TODO_DESTROY_COMPLETED:
-      destroyCompleted();
-      break;
-
-    default:
-      return true;
+var undoCompleteStream = AppDispatcher.undoCompleteStream.map(function(todoId) {
+  return function(todos) {
+    var complete = {};
+    complete[todoId] = {complete: false}
+    return _.merge(todos, complete);
   }
-
-  // This often goes in each case that should trigger a UI change. This store
-  // needs to trigger a UI change after every view action, so we can make the
-  // code less repetitive by putting it here.  We need the default case,
-  // however, to make sure this only gets called after one of the cases above.
-  TodoStore.emitChange();
-
-  return true; // No errors.  Needed by promise in Dispatcher.
 });
 
-module.exports = TodoStore;
+var clearCompletedStream = AppDispatcher.clearCompletedStream.map(function() {
+  return function(todos) {
+    return _.reject(todos, function(todo) {
+      return todo.complete;
+    });
+  }
+});
+
+var toggleAllCompleteMod = AppDispatcher.toggleAllCompletedStream.map(function(toggle) {
+  return function(todos) {
+    return _.mapValues(todos, function(todo) {
+      return _.merge(todo, {complete: toggle});
+    });
+  };
+});
+
+var updateMod = AppDispatcher.updateStream.map(function(value) {
+  return function(todos) {
+    var newValue = {};
+    newValue[value.id] = {text: value.text};
+    return _.merge(todos, newValue);
+  };
+})
+
+var modificationsStream = createNewItem
+  .merge(destroyTodoStream)
+  .merge(completeStream)
+  .merge(undoCompleteStream)
+  .merge(clearCompletedStream)
+  .merge(toggleAllCompleteMod)
+  .merge(updateMod)
+
+var allTodos = modificationsStream.scan({}, function(todos, modificationFn) {
+  return modificationFn(todos)
+});
+
+var allCompleted = allTodos.map(function(todos) {
+  return _.every(todos, function(todo) {
+    return todo.complete;
+  });
+});
+
+module.exports = {
+  allTodos: allTodos,
+  allCompleted: allCompleted
+};
