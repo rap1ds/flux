@@ -10,9 +10,9 @@
  */
 
 var React = require('react');
-var Bacon = require('baconjs');
 var ReactPropTypes = React.PropTypes;
 var eventBinder = require('../stream-helpers/EventBinder');
+var Immutable = require('immutable');
 
 var ENTER_KEY_CODE = 13;
 
@@ -43,7 +43,6 @@ var TodoTextInput = React.createClass({
 
   componentDidMount: function() {
     var component = this;
-    var eventStream = eventBinder(component);
 
     var enterStream = this.keyDownStream.filter(function(event) {
       return event.keyCode === ENTER_KEY_CODE;
@@ -53,10 +52,16 @@ var TodoTextInput = React.createClass({
       return event.target.value;
     })
 
-    saveStream.onValue(function() {
+    var saveWithText = saveStream.filter(function(value) {
+      return value !== "";
+    })
+
+    saveWithText.onValue(function(title) {
       component.setState({
         value: ''
       });
+
+      component.props.onSave(title);
     });
 
     this.changeStream.onValue(function(e) {
@@ -64,8 +69,6 @@ var TodoTextInput = React.createClass({
         value: e.target.value
       });
     });
-
-    this.props.onSave.plug(saveStream);
   },
 
   /**

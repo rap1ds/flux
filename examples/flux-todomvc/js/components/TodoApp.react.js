@@ -18,57 +18,26 @@ var Footer = require('./Footer.react');
 var Header = require('./Header.react');
 var MainSection = require('./MainSection.react');
 var React = require('react');
-var TodoStore = require('../stores/TodoStore');
-
-/**
- * Retrieve the current TODO data from the TodoStore
- */
-function getTodoState() {
-  return {
-    allTodos: {},
-    areAllComplete: null
-  };
-}
 
 var TodoApp = React.createClass({
-
-  getInitialState: function() {
-    return getTodoState();
-  },
-
-  componentDidMount: function() {
-    var component = this;
-
-    TodoStore.allTodos.onValue(function(todos) {
-      component.setState({
-        allTodos: todos,
-        areAllComplete: false
-      });
-    });
-  },
 
   /**
    * @return {object}
    */
   render: function() {
-  	return (
+    var todos = this.props.cursor.cursor(["todos"])
+    return (
       <div>
-        <Header />
-        <MainSection
-          allTodos={this.state.allTodos}
-          areAllComplete={this.state.areAllComplete}
+        <Header
+          todos={todos}
         />
-        <Footer allTodos={this.state.allTodos} />
+        <MainSection
+          allTodos={todos}
+        />
+        <Footer allTodos={todos} />
       </div>
-  	);
+    );
   },
-
-  /**
-   * Event handler for 'change' events coming from the TodoStore
-   */
-  _onChange: function() {
-    this.setState(getTodoState());
-  }
 
 });
 

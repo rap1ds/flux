@@ -11,8 +11,6 @@
 
 var React = require('react');
 var ReactPropTypes = React.PropTypes;
-var eventBinder = require('../stream-helpers/EventBinder');
-var AppDispatcher = require('../dispatcher/AppDispatcher');
 
 var Footer = React.createClass({
 
@@ -20,33 +18,22 @@ var Footer = React.createClass({
     allTodos: ReactPropTypes.object.isRequired
   },
 
-  componentWillMount: function() {
-    var eventStream = eventBinder(this);
-    this.clearClickStream = eventStream("_onClearCompletedClick");
-  },
-
-  componentDidMount: function() {
-    var component = this;
-    AppDispatcher.clearCompletedStream.plug(this.clearClickStream);
-  },
-
   /**
    * @return {object}
    */
   render: function() {
-    var allTodos = this.props.allTodos;
-    var total = Object.keys(allTodos).length;
+    var allTodos = this.props.allTodos.toVector();
+    var total = allTodos.length;
 
     if (total === 0) {
       return null;
     }
 
-    var completed = 0;
-    for (var key in allTodos) {
-      if (allTodos[key].complete) {
-        completed++;
-      }
-    }
+    var completed = allTodos.map(function(todo) {
+      return todo.get('complete') ? 1 : 0;
+    }).reduce(function(a, b) {
+      return a + b
+    }, 0);
 
     var itemsLeft = total - completed;
     var itemsLeftPhrase = itemsLeft === 1 ? ' item ' : ' items ';
@@ -58,12 +45,12 @@ var Footer = React.createClass({
       clearCompletedButton =
         <button
           id="clear-completed"
-          onClick={this._onClearCompletedClick}>
+          onClick={this.onClearCompletedClick}>
           Clear completed ({completed})
         </button>;
     }
 
-  	return (
+    return (
       <footer id="footer">
         <span id="todo-count">
           <strong>
@@ -74,6 +61,16 @@ var Footer = React.createClass({
         {clearCompletedButton}
       </footer>
     );
+  },
+
+  onClearCompletedClick: function() {
+    var allTodos = this.props.allTodos;
+
+    allTodos.update(function(todos) {
+      return todos.filter(function(todo) {
+        return !todo.get('complete');
+      });
+    });
   }
 
 });

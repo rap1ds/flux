@@ -13,8 +13,6 @@ var React = require('react');
 var Bacon = require('baconjs');
 var ReactPropTypes = React.PropTypes;
 var TodoTextInput = require('./TodoTextInput.react');
-var eventBinder = require('../stream-helpers/EventBinder');
-var AppDispatcher = require('../dispatcher/AppDispatcher');
 
 var cx = require('react/lib/cx');
 
@@ -30,49 +28,6 @@ var TodoItem = React.createClass({
     };
   },
 
-  componentWillMount: function() {
-    var eventStream = eventBinder(this);
-
-    this.onSave = new Bacon.Bus();
-    this.destroyClickStream = eventStream("_onDestroyClick");
-    this.toggleCompleteClickStream = eventStream("_onToggleComplete");
-  },
-
-  componentDidMount: function() {
-    var component = this;
-
-    var destroyStream = this.destroyClickStream.map(function() {
-      return component.props.todo.id;
-    });
-
-    AppDispatcher.destroyTodoStream.plug(destroyStream);
-
-    var completeStream = this.toggleCompleteClickStream.filter(function() {
-      return !component.props.todo.complete;
-    }).map(function() {
-      return component.props.todo.id;
-    });
-
-    var undoCompleteStream = this.toggleCompleteClickStream.filter(function() {
-      return component.props.todo.complete;
-    }).map(function() {
-      return component.props.todo.id;
-    });
-
-    AppDispatcher.completeStream.plug(completeStream);
-    AppDispatcher.undoCompleteStream.plug(undoCompleteStream);
-
-    this.onSave.onValue(function(v) {
-      component.setState({isEditing: false});
-    });
-
-    var updateStream = this.onSave.map(function(text) {
-      return {id: component.props.todo.id, text: text}
-    })
-
-    AppDispatcher.updateStream.plug(updateStream);
-  },
-
   /**
    * @return {object}
    */
@@ -85,7 +40,7 @@ var TodoItem = React.createClass({
         <TodoTextInput
           className="edit"
           onSave={this.onSave}
-          value={todo.text}
+          value={todo.get('text')}
         />;
     }
 
@@ -97,25 +52,45 @@ var TodoItem = React.createClass({
     return (
       <li
         className={cx({
-          'completed': todo.complete,
+          'completed': todo.get('complete'),
           'editing': this.state.isEditing
         })}
-        key={todo.id}>
+        key={todo.get('id')}>
         <div className="view">
           <input
             className="toggle"
             type="checkbox"
-            checked={todo.complete}
-            onChange={this._onToggleComplete}
+            checked={todo.get('complete')}
+            onChange={this.onToggleComplete}
           />
           <label onDoubleClick={this._onDoubleClick}>
-            {todo.text}
+            {todo.get('text')}
           </label>
-          <button className="destroy" onClick={this._onDestroyClick} />
+          <button className="destroy" onClick={this.onDestroyClick} />
         </div>
         {input}
       </li>
     );
+  },
+
+  onToggleComplete: function() {
+    var todo = this.props.todo;
+    todo.set('complete', !todo.get('complete'))
+  },
+
+  onSave: function(title) {
+    this.setState({isEditing: false});
+    this.props.todo.set('text', title);
+  },
+
+  onDestroyClick: function() {
+    var currentTodo = this.props.todo;
+
+    this.props.allTodos.update(function(allTodosData) {
+      return allTodosData.filter(function(todoInList) {
+        return todoInList !== currentTodo.deref();
+      });
+    });
   },
 
   _onDoubleClick: function() {

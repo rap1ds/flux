@@ -12,67 +12,61 @@
 var React = require('react');
 var ReactPropTypes = React.PropTypes;
 var TodoItem = require('./TodoItem.react');
-var eventBinder = require('../stream-helpers/EventBinder');
-var AppDispatcher = require('../dispatcher/AppDispatcher');
-var TodoStore = require('../stores/TodoStore');
 
 var MainSection = React.createClass({
 
   propTypes: {
-    allTodos: ReactPropTypes.object.isRequired,
-    areAllComplete: ReactPropTypes.bool.isRequired
+    allTodos: ReactPropTypes.object.isRequired
   },
 
-  componentWillMount: function() {
-    var eventStream = eventBinder(this);
+  allCompleted: function() {
+    var allTodos = this.props.allTodos;
 
-    this.toggleCompleteAllClickStream = eventStream("_onToggleCompleteAll");
-  },
-
-  componentDidMount: function() {
-    var component = this;
-    TodoStore.allCompleted.onValue(function(allCompleted) {
-      component.setState({
-        allCompleted: allCompleted
-      });
-    })
-
-    var toggleAll = this.toggleCompleteAllClickStream.map(function() {
-      return !component.state.allCompleted;
+    return allTodos.length && allTodos.every(function(todo) {
+      return todo.get('complete');
     });
-
-    AppDispatcher.toggleAllCompletedStream.plug(toggleAll);
   },
 
   /**
    * @return {object}
    */
   render: function() {
+    var allTodos = this.props.allTodos;
+
     // This section should be hidden by default
     // and shown when there are todos.
-    if (Object.keys(this.props.allTodos).length < 1) {
+    if(!allTodos || allTodos.length === 0) {
       return null;
     }
 
-    var allTodos = this.props.allTodos;
-    var todos = [];
-
-    for (var key in allTodos) {
-      todos.push(<TodoItem key={key} todo={allTodos[key]} />);
-    }
+    var todos = allTodos.map(function(todo) {
+      return (
+        <TodoItem key={todo.id} allTodos={allTodos} todo={todo} />
+      );
+    }).toArray();
 
     return (
       <section id="main">
         <input
           id="toggle-all"
           type="checkbox"
-          onChange={this._onToggleCompleteAll}
-          checked={this.props.areAllComplete ? 'checked' : ''}
+          onChange={this.onToggleCompleteAll}
+          checked={this.allCompleted() ? 'checked' : ''}
         />
         <label htmlFor="toggle-all">Mark all as complete</label>
         <ul id="todo-list">{todos}</ul>
       </section>
     );
+  },
+
+  onToggleCompleteAll: function() {
+    var allCompleted = this.allCompleted();
+
+    this.props.allTodos.update(function(todos) {
+      return todos.map(function(todo) {
+        return todo.set('complete', !allCompleted);
+      })
+    })
   }
 
 });

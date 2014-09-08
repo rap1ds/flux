@@ -10,27 +10,10 @@
  */
 
 var React = require('react');
-var Bacon = require('baconjs');
 var TodoTextInput = require('./TodoTextInput.react');
-var AppDispatcher = require('../dispatcher/AppDispatcher');
+var Immutable = require('immutable');
 
 var Header = React.createClass({
-
-  componentWillMount: function() {
-    this.onSave = new Bacon.Bus();
-  },
-
-  componentDidMount: function() {
-    var saveStream = this.onSave
-      .map(function(text) {
-        return text.trim();
-      })
-      .filter(function(v) {
-        return v;
-      });
-
-    AppDispatcher.createTodoStream.plug(saveStream);
-  },
 
   /**
    * @return {object}
@@ -43,9 +26,29 @@ var Header = React.createClass({
           id="new-todo"
           placeholder="What needs to be done?"
           onSave={this.onSave}
+          todos={this.props.todos}
         />
       </header>
     );
+  },
+
+  onSave: function(title) {
+    function create(text) {
+      // Hand waving here -- not showing how this interacts with XHR or persistent
+      // server-side storage.
+      // Using the current timestamp in place of a real id.
+      var id = Date.now();
+      var _todos = {};
+      return Immutable.fromJS({
+        id: id,
+        complete: false,
+        text: text
+      });
+    }
+
+    this.props.todos.update(function(todos) {
+      return todos.toVector().push(create(title))
+    })
   }
 
 });
